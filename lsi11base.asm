@@ -33,6 +33,29 @@
 ;         g=5       r5
 
 
+; interrupt register
+;     i6:  interrupt handling by microcode at 0x604 (for both event and device)
+;     i5:  interrupt enable (for both event and device)
+;     i4:  trace trap
+;     i3:  device interrupt
+;     i2:  event interrupt (line time clock)
+;     i1:  power fail, fault (distinguish by a FAST DATA IN cycle)
+;     i0:  memory refresh
+
+
+; PDP-11 PSW
+; bits stored in rpswh:
+;     bit 7:      interrupt enable - also see interrupt enable i5
+;     bits 6..5:  reserved
+;     bit 4:      trace trap       - also see interrupt enable i4
+
+; bits stored in condition code hardware:
+;     bit 3:     N - negative
+;     bit 2:     Z - zero
+;     bit 1:     V - overflow
+;     bit 0:     C - carry
+
+
 ; TTL control field:
 ; 0x1 - rsv1
 ; 0x9 - ifclr - IFCLR + SRUN L
@@ -101,16 +124,18 @@ L026:	db1	rdstl,rdstl
 	rfs
 	riw2	sph,spl,,rsv1
 	iw	0x0,pcl
-	ri	i5
-	riw2	sph,spl
+
+	ri	i5		; clear interrupt enable
+	riw2	sph,spl		; read PSW from stack
 	ib	0x1,rpswh
-	jnbt	L030
-	si	i5
+	jnbt	L030		; test interrupt flag
+	si	i5		; set interrupt enable
+
 L030:	tl	0x10,rpswh
 	jzbt	L033
 	jmp	L1bc
 
-L033:	lcf	0xf,rpswh,rsvc
+L033:	lcf	0xf,rpswh,rsvc	; load hardware condition codes
 	nop
 
 
@@ -161,7 +186,7 @@ L04f:	jmp	L373
 
 ; reset mode 1, execute from octal 173000
 reset_mode_1:
-L054:	ll	0xf6,pch
+	ll	0xf6,pch
 	jmp	L086
 
 
@@ -657,7 +682,7 @@ L18d:	ib	0x2,rirl
 
 
 op_illegal:
-	ll	0x08,rsrcl	; vector 010 - illegal or reserved inst
+	ll	0x08,rsrcl		; vector 010 - illegal or reserved inst
 	jmp	trap
 
 
@@ -665,7 +690,7 @@ op_illegal:
 	ow	rdsth,rdstl
 
 
-L196:	ri	i4
+L196:	ri	i4			; clear trace interrupt enable
 	jmp	L19a
 
 
@@ -743,7 +768,7 @@ L1b6:	jsr	L2e6
 	jmp	trap
 
 
-L1bc:	si	i4
+L1bc:	si	i4		; set trace interrupt enable
 	lcf	0xf,rpswh
 	tl	0x4,rirh
 	jmp	L00f
@@ -1324,7 +1349,7 @@ L2e6:	al	0x1,rpswh
 trap:	ll	0x0,rsrch	; high byte of vector is zero
 
 ; trap, 16-bit vector in rsrc
-trap16:	ri	i4
+trap16:	ri	i4		; clear trace interrupt enable
 
 	al	0xfe,spl	; sp -= 2
 	cdb	sph
@@ -1349,17 +1374,17 @@ trap16:	ri	i4
 trapgo:	riw2	rsrch,rsrcl	; fetch new PC
 	iw	0x0,pcl
 
-	ri	i5
+	ri	i5		; clear interrupt enable
 
 	r	rsrch,rsrcl	; fetch new PSW
 	ib	0x1,rpswh
 	
-	jnbt	L318
+	jnbt	L318		; if PSW7, set interrupt enable
 	si	i5
 
-L318:	tl	0x10,rpswh
+L318:	tl	0x10,rpswh	; trace flag?
 	jzbt	L31b
-	si	i4
+	si	i4		; set trace interrupt enable
 
 L31b:	lcf	0xf,rpswh,rsvc
 	nl	0x47,rpswl
