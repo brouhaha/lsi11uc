@@ -35,7 +35,7 @@
 
 ; interrupt register
 ;     i6:  interrupt handling by microcode at 0x604 (for both event and device)
-;     i5:  interrupt enable (for both event and device)
+;     i5:  interrupt enable when 1 (for both event and device)
 ;     i4:  trace trap
 ;     i3:  device interrupt
 ;     i2:  event interrupt (line time clock)
@@ -45,8 +45,8 @@
 
 ; PDP-11 PSW
 ; bits stored in rpswh:
-;     bit 7:      interrupt enable - also see interrupt enable i5
-;     bits 6..5:  reserved
+;     bit 7:      interrupt priority - 0 = enable, 1 = disable, see interrupt reg i5
+;     bits 6..5:  reserved (interrupt priority bits on other PDP-11 models)
 ;     bit 4:      trace trap       - also see interrupt enable i4
 
 ; bits stored in condition code hardware:
@@ -128,7 +128,7 @@ L026:	db1	rdstl,rdstl
 	ri	i5		; clear interrupt enable
 	riw2	sph,spl		; read PSW from stack
 	ib	0x1,rpswh
-	jnbt	L030		; test interrupt flag
+	jnbt	L030		; test PSW interrupt priority
 	si	i5		; set interrupt enable
 
 L030:	tl	0x10,rpswh
@@ -528,8 +528,8 @@ L136:	jsr	L3fa
 
 L144:	orb	rdstl,rpswh
 
-	jnbt	L147
-	si	i5
+	jnbt	L147		; test PSW interrupt priority
+	si	i5		; enable interrupts
 L147:	rfs
 
 
@@ -664,7 +664,7 @@ L17a:	lgl	rbal
 	cwf	rdstl,rsrcl	; 188
 
 
-L189:	ri	i5
+L189:	ri	i5		; disable interrupts
 	nl	0x10,rpswh
 	jmp	L144
 
@@ -698,7 +698,7 @@ L196:	ri	i4			; clear trace interrupt enable
 	ow	rdsth,rdstl
 
 
-L19a:	si	i5
+L19a:	si	i5			; enable interrupts
 	jmp	op_reset
 
 
@@ -873,19 +873,19 @@ L1ee:	wiw2	gh,gl
 	mb	gl,rdstl
 
 
-	ri	i5
+	ri	i5			; disable interrupts
 	nl	0x10,rpswh
 	nl	0xef,rdstl
 	orb	rdstl,rpswh
-	jnbt	L1f7
-	si	i5
+	jnbt	L1f7			; test PSW interrupt priority
+	si	i5			; enable interrupts
 L1f7:	lcf	0xf,rdstl,rsvc
 	nop
 
 
-L1f9:	ll	0xd,rirl	; carriage return
+L1f9:	ll	0xd,rirl		; carriage return
 	al	0x8,rpswh
-	jmp	L3e5		; output character to SLU
+	jmp	L3e5			; output character to SLU
 
 
 	ccf	rdstl
@@ -1111,12 +1111,12 @@ L26e:	nl	0xef,rpswl
 
 
 	ob	rdstl,rdstl
-	ri	i5
+	ri	i5			; disable interrupts
 	nl	0x10,rpswh
 	nl	0xef,rdstl
 	orb	rdstl,rpswh
-	jnbt	L277
-	si	i5
+	jnbt	L277			; test PSW interrupt priority
+	si	i5			; enable interrupts
 L277:	lcf	0xf,rdstl,rsvc
 	nop
 
@@ -1374,13 +1374,13 @@ trap16:	ri	i4		; clear trace interrupt enable
 trapgo:	riw2	rsrch,rsrcl	; fetch new PC
 	iw	0x0,pcl
 
-	ri	i5		; clear interrupt enable
+	ri	i5		; disable interrupts
 
 	r	rsrch,rsrcl	; fetch new PSW
 	ib	0x1,rpswh
 	
-	jnbt	L318		; if PSW7, set interrupt enable
-	si	i5
+	jnbt	L318		; if PSW interrupt priority is zero
+	si	i5		;   enable interrupts
 
 L318:	tl	0x10,rpswh	; trace flag?
 	jzbt	L31b
