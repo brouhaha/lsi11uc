@@ -1,6 +1,6 @@
 ; DEC LSI-11 microcode, MICROMs CP1631-10 and CP1631-07
 ; Reverse-engineered source code
-; Copyright 2015 Eric Smith <spacewar@gmail.com>
+; Copyright 2015-2016 Eric Smith <spacewar@gmail.com>
 
 ; Reverse-engineering in progress:
 ;   There are probably many errors.
@@ -19,13 +19,13 @@
 ; ------  --------  ----------  --------------------------------
 ; r3:2              rba         bus address
 ; r5:4              rsrc        source
-; r7:6		    rdst        desitantion
+; r7:6		    rdst        destination
 ; r9:8              rir         instruction register
 ; rb:a              rpsw        program status word
 ; rd:c    g=6       sp          stack pointer
 ; rf:e    g=7       pc          program counter
 
-;         g=0       10
+;         g=0       r0
 ;         g=1       r1
 ;         g=2       r2
 ;         g=3       r3
@@ -336,11 +336,12 @@ op_iot:
 	jmp	L337
 
 
-L0c1:	slb	rirh,rirh
+; MARK 0064nn
+L0c1:	slb	rirh,rirh		; PC := PC + 2 * ir[5:0]
 	aw	rirh,pcl
-	r	pch,pcl
+	r	pch,1pcl			; rdst := [PC]
 	iw	0x0,rdstl
-	icw2	pcl,spl
+	icw2	pcl,spl			; SP := PC + 2
 	jmp	L0dc
 
 
@@ -377,12 +378,12 @@ L0d4:	al	0x8,rpswl
 	mb	rbah,pch
 
 
-L0dc:	ll	0x5,rsrcl
+; continuation of MARK instruction
+L0dc:	ll	0x5,rsrcl		; PC := R5
 	lgl	rsrcl
 	mw	gl,pcl,rsvc
+
 	mw	rdstl,gl
-
-
 	al	0xfe,gl
 	cdb	gh
 	mw	gl,rbal
@@ -436,7 +437,8 @@ op_bpt:	ll	0x0c,rsrcl	; vector 014 - BPT inst (000003) or trace trap
 	lgl	rirh
 
 ; HALT 000000
-op_halt:	tl	0x40,rpswl
+op_halt:
+	tl	0x40,rpswl
 	jzbf	L127
 
 L103:	nl	0xf0,rpswh
@@ -527,13 +529,12 @@ L136:	jsr	L3fa
 
 
 L144:	orb	rdstl,rpswh
-
-	jnbt	L147		; test PSW interrupt priority
-	si	i5		; enable interrupts
+	jnbt	L147			; test PSW interrupt priority
+	si	i5			; enable interrupts
 L147:	rfs
 
 
-	cwf	gl,rsrcl	; 148 - CMP instruction 02ssdd
+	cwf	gl,rsrcl		; 148 - CMP instruction 02ssdd
 
 
 L149:	r	sph,spl
@@ -541,7 +542,7 @@ L149:	r	sph,spl
 	rfs
 
 
-	twf	rsrcl,gl	; 14c - BIT instruction 03ssdd
+	twf	rsrcl,gl		; 14c - BIT instruction 03ssdd
 
 
 L14d:	ll	0x4,rirl
@@ -549,7 +550,7 @@ L14d:	ll	0x4,rirl
 	jmp	L155
 
 
-	ncwf	rsrcl,gl	; 150 - BIC instruction 04ssdd
+	ncwf	rsrcl,gl		; 150 - BIC instruction 04ssdd
 
 
 L151:	ll	0x0,pcl
@@ -557,7 +558,7 @@ L151:	ll	0x0,pcl
 	jmp	L3b2
 
 
-	orwf	rsrcl,gl	; 154 - BIS instruction 05ssdd
+	orwf	rsrcl,gl		; 154 - BIS instruction 05ssdd
 
 
 L155:	riw2	rirh,rirl
@@ -565,7 +566,7 @@ L155:	riw2	rirh,rirl
 	rfs	,,fastdin
 
 
-	awf	rsrcl,gl	; 158 - ADD instruction 06ssdd
+	awf	rsrcl,gl		; 158 - ADD instruction 06ssdd
 
 
 L159:	dw1	rbal,rbal
@@ -573,7 +574,7 @@ L159:	dw1	rbal,rbal
 	jmp	L38e
 
 
-	xwf	rsrcl,gl
+	xwf	rsrcl,gl		; 15c
 
 
 	jmp	L000
@@ -583,7 +584,7 @@ L15e:	ll	0x4,rpswl
 	jmp	op_illegal
 
 
-	ccf	rirl		; 160
+	ccf	rirl			; 160
 
 
 ; WAIT 000001
@@ -601,7 +602,7 @@ L166:	orbf	rpswh,rdstl,rsvc
 	ob	rdstl,rdstl
 
 
-	cbf	gl,rsrcl	; 168 - CMPB instruction 12ssdd
+	cbf	gl,rsrcl		; 168 - CMPB instruction 12ssdd
 
 
 L169:	ll	0xa8,rpswl
@@ -609,7 +610,7 @@ L169:	ll	0xa8,rpswl
 	jmp	L16d
 
 
-	tbf	rsrcl,gl	; 16c - BITB instruction 13ssdd
+	tbf	rsrcl,gl		; 16c - BITB instruction 13ssdd
 
 
 L16d:	mb	rirl,rbah
@@ -617,7 +618,7 @@ L16d:	mb	rirl,rbah
 	jmp	L171
 
 
-	ncbf	rsrcl,gl	; 170 - BICB instruction 14ssdd
+	ncbf	rsrcl,gl		; 170 - BICB instruction 14ssdd
 
 
 L171:	mb	rirl,rbal
@@ -625,7 +626,7 @@ L172:	riw1	rbah,rbal
 	jmp	L18d
 
 
-	orbf	rsrcl,gl	; 174 - BISB instruction 15ssdd
+	orbf	rsrcl,gl		; 174 - BISB instruction 15ssdd
 
 
 L175:	ll	0x8,rirh
@@ -633,7 +634,7 @@ L175:	ll	0x8,rirh
 	jmp	L105
 
 
-	swf	rsrcl,gl	; 178 - BISB instruction 16ssdd
+	swf	rsrcl,gl		; 178 - BISB instruction 16ssdd
 
 
 	jmp	L000
@@ -661,15 +662,15 @@ L17a:	lgl	rbal
 	jmp	op_halt
 
 
-	cwf	rdstl,rsrcl	; 188
+	cwf	rdstl,rsrcl		; 188
 
 
-L189:	ri	i5		; disable interrupts
+L189:	ri	i5			; disable interrupts
 	nl	0x10,rpswh
 	jmp	L144
 
 
-	twf	rsrcl,rdstl	; 18c
+	twf	rsrcl,rdstl		; 18c
 
 
 L18d:	ib	0x2,rirl
@@ -702,7 +703,7 @@ L19a:	si	i5			; enable interrupts
 	jmp	op_reset
 
 
-	xwf	rsrcl,rdstl,rsvc	; 19c
+	xwf	rsrcl,rdstl,rsvc	; 19c 
 	ow	rdsth,rdstl
 
 
@@ -712,7 +713,7 @@ op_reset:
 	jmp	L04d
 
 
-	ccf	rirl	; 1a0
+	ccf	rirl			; 1a0
 
 
 L1a1:	al	0xf0,rpswl
@@ -728,7 +729,7 @@ L1a6:	jzbf	L172
 	jmp	L355
 
 
-	cbf	rdstl,rsrcl	; 1a8
+	cbf	rdstl,rsrcl		; 1a8
 
 
 L1a9:	jsr	L2e6
@@ -736,7 +737,7 @@ L1a9:	jsr	L2e6
 	jmp	L292
 
 
-	tbf	rsrcl,rdstl	; 1ac
+	tbf	rsrcl,rdstl		; 1ac
 
 
 L1ad:	iw	0x0,rdstl
@@ -752,7 +753,7 @@ L1b2:	orb	rdstl,rpswh,rsvc
 	mwf	rpswh,gl
 
 
-	orbf	rsrcl,rdstl,rsvc
+	orbf	rsrcl,rdstl,rsvc	; 1b4
 	ob	rdstl,rdstl
 
 
@@ -760,21 +761,21 @@ L1b6:	jsr	L2e6
 	jmp	L37a
 
 
-	swf	rsrcl,rdstl,rsvc
+	swf	rsrcl,rdstl,rsvc	; 1b8
 	ow	rdsth,rdstl
 
 
-	ll	0x0c,rsrcl	; vector 014 - BPT inst (000003) or trace trap
+	ll	0x0c,rsrcl		; vector 014 - BPT inst (000003) or trace trap
 	jmp	trap
 
 
-L1bc:	si	i4		; set trace interrupt enable
+L1bc:	si	i4			; set trace interrupt enable
 	lcf	0xf,rpswh
 	tl	0x4,rirh
 	jmp	L00f
 
 
-	sbf	gl,gl,rsvc
+	sbf	gl,gl,rsvc		; 1c0
 	nop
 
 
@@ -782,7 +783,7 @@ L1bc:	si	i4		; set trace interrupt enable
 	jmp	trap
 
 
-	icb1f	gl,gl,rsvc
+	icb1f	gl,gl,rsvc		; 1c4
 	lcf	0x1,rirl
 
 
@@ -790,7 +791,7 @@ L1c6:	jsr	print_octal_word
 	jmp	L352
 
 
-	ocbf	gl,gl,rsvc
+	ocbf	gl,gl,rsvc		; 1c8
 	nop
 
 
@@ -798,7 +799,7 @@ L1ca:	ow	rbah,rbal
 	jmp	L1ce
 
 
-	db1f	gl,gl,rsvc
+	db1f	gl,gl,rsvc		; 1cc
 	lcf	0x1,rirl
 
 
@@ -806,7 +807,7 @@ L1ce:	wiw2	gh,gl
 	jmp	L1d2
 
 
-	tcbf	gl,gl,rsvc
+	tcbf	gl,gl,rsvc		; 1d0
 	nop
 
 
@@ -814,7 +815,7 @@ L1d2:	ow	rsrch,rsrcl
 	jmp	L1d6
 
 
-	ll	0x0,rsrcl,rsvc
+	ll	0x0,rsrcl,rsvc		; 1d4
 	sbcf	rsrcl,gl
 
 
@@ -822,7 +823,7 @@ L1d6:	wiw2	gh,gl
 	jmp	L1da
 
 
-	ll	0x0,rsrcl,rsvc
+	ll	0x0,rsrcl,rsvc		; 1d8
 	abcf	rsrcl,gl
 
 
@@ -830,7 +831,7 @@ L1da:	ow	rdsth,rdstl
 	jmp	L1de
 
 
-	slbf	gl,gl,rsvc
+	slbf	gl,gl,rsvc		; 1dc
 	srbcf	gl,gl
 
 
@@ -838,7 +839,7 @@ L1de:	wiw2	gh,gl
 	jmp	L1ea
 
 
-	srbcf	gl,gl
+	srbcf	gl,gl			; 1e0
 	srbcf	gl,gl,rsvc
 	slbcf	gl,gl
 
@@ -846,13 +847,13 @@ L1de:	wiw2	gh,gl
 	jmp	L000
 
 
-	slbcf	gl,rsrcl
+	slbcf	gl,rsrcl		; 1e4
 	srbcf	gl,gl
 	srbcf	gl,gl,rsvc
 	slbcf	gl,gl
 
 
-	slbcf	gl,gl
+	slbcf	gl,gl			; 1e8
 
 
 	jmp	L000
@@ -862,7 +863,7 @@ L1ea:	ow	rpswh,rpswl
 	jmp	L1ee
 
 
-	slbf	gl,gl
+	slbf	gl,gl			; 1ec
 	jmp	L000
 
 
@@ -870,12 +871,12 @@ L1ee:	wiw2	gh,gl
 	jmp	L206,rsvc
 
 
-	mb	gl,rdstl
-
+; possibly MTPS 1064ss
+	mb	gl,rdstl		; 1f0
 
 	ri	i5			; disable interrupts
-	nl	0x10,rpswh
-	nl	0xef,rdstl
+	nl	0x10,rpswh		; mask off all PSW bits other than trace
+	nl	0xef,rdstl		; OR all rdstl bits other than trace into PSW
 	orb	rdstl,rpswh
 	jnbt	L1f7			; test PSW interrupt priority
 	si	i5			; enable interrupts
@@ -888,13 +889,14 @@ L1f9:	ll	0xd,rirl		; carriage return
 	jmp	L3e5			; output character to SLU
 
 
-	ccf	rdstl
+; possibly MFPS 1067dd
+	ccf	rdstl			; 1fc
 	nl	0xf0,rpswh
 	nl	0xf,rdstl
 	jmp	L1b2
 
 
-	swf	gl,gl
+	swf	gl,gl			; 200 CLR 0050dd
 
 
 	jmp	L000
@@ -904,7 +906,7 @@ L202:	ll	0xff,gl,rsvc
 	mbf	gl,gh
 
 
-	icw1f	gl,gl,rsvc
+	icw1f	gl,gl,rsvc		; 204 INC 0052dd
 	lcf	0x1,rirl
 
 
@@ -914,7 +916,7 @@ L206:	ow	rirl,rirh
 	jmp	L000
 
 
-	ocwf	gl,gl,rsvc
+	ocwf	gl,gl,rsvc		; 208 NEG 0054dd
 	nop
 
 
@@ -922,7 +924,7 @@ L20a:	w	rbah,rbal
 	jmp	L21a
 
 
-	dw1f	gl,gl,rsvc
+	dw1f	gl,gl,rsvc		; 20c DEC 0053dd
 	lcf	0x1,rirl
 
 
@@ -930,7 +932,7 @@ L20a:	w	rbah,rbal
 	jmp	L000
 
 
-	tcwf	gl,gl,rsvc
+	tcwf	gl,gl,rsvc		; 210 TST 0057dd
 	nop
 
 
@@ -938,7 +940,7 @@ L212:	nl	0xe0,rdstl
 	jmp	L189
 
 
-	ll	0x0,rsrch,rsvc
+	ll	0x0,rsrch,rsvc		; 214
 	swcf	rsrch,gl
 
 
@@ -946,7 +948,7 @@ L216:	mw	rdstl,gl
 	rfs
 
 
-	ll	0x0,rsrch,rsvc
+	ll	0x0,rsrch,rsvc		; 218
 	awcf	rsrch,gl
 
 
@@ -954,7 +956,7 @@ L21a:	ow	rdsth,rdstl
 L21b:	rfs
 
 
-	sbf	rirl,rirl,rsvc
+	sbf	rirl,rirl,rsvc		; 21c
 	mwf	gl,gl
 
 
@@ -962,7 +964,7 @@ L21e:	jc8t	L252
 	jmp	L20a
 
 
-	srwcf	gh,gh
+	srwcf	gh,gh			; 220
 	srwcf	gh,gh,rsvc
 	slwcf	gl,gl
 
@@ -970,13 +972,13 @@ L21e:	jc8t	L252
 	jmp	L000
 
 
-	slbcf	gh,rsrcl
+	slbcf	gh,rsrcl		; 224
 	srwcf	gh,gh
 	srwcf	gh,gh,rsvc
 	slwcf	gl,gl
 
 
-	slwcf	gl,gl
+	slwcf	gl,gl			; 228
 
 
 L229:	srw	rdsth,rdsth
@@ -984,7 +986,7 @@ L229:	srw	rdsth,rdsth
 	jmp	L279
 
 
-	slwf	gl,gl
+	slwf	gl,gl			; 22c
 
 
 L22d:	slw	rdstl,rdstl
@@ -1008,7 +1010,7 @@ L23a:	r	rbah,rbal
 	jmp	L1ad
 
 
-	jnt	L202
+	jnt	L202			; 23c
 	ll	0x0,gl,rsvc
 	mbf	gl,gh
 
@@ -1016,7 +1018,7 @@ L23a:	r	rbah,rbal
 	jmp	L000
 
 
-	sbf	rdstl,rdstl,rsvc
+	sbf	rdstl,rdstl,rsvc	; 240 CLRB 1050dd
 	ob	rdstl,rdstl
 
 
@@ -1024,7 +1026,7 @@ L242:	jsr	L2e6
 	jmp	L35a
 
 
-	icb1f	rdstl,rdstl
+	icb1f	rdstl,rdstl		; 244 INCB 1052dd
 	lcf	0x1,rirl,rsvc
 	ob	rdstl,rdstl
 
@@ -1032,7 +1034,7 @@ L242:	jsr	L2e6
 	jmp	L000
 
 
-	ocbf	rdstl,rdstl,rsvc
+	ocbf	rdstl,rdstl,rsvc	; 248 NEGB 1054dd
 	ob	rdstl,rdstl
 
 
@@ -1040,7 +1042,7 @@ L24a:	lcf	0xf,rdstl
 	jmp	L212
 
 
-	db1f	rdstl,rdstl
+	db1f	rdstl,rdstl		; 24c DECB 1053dd
 	lcf	0x1,rirl,rsvc
 	ob	rdstl,rdstl
 
@@ -1048,7 +1050,7 @@ L24a:	lcf	0xf,rdstl
 	jmp	L000
 
 
-	tcbf	rdstl,rdstl,rsvc
+	tcbf	rdstl,rdstl,rsvc	; 250 TSTB 1057dd
 	ob	rdstl,rdstl
 
 
@@ -1056,7 +1058,7 @@ L252:	jnbt	L24a
 	jmp	L216
 
 
-	ll	0x0,rsrcl
+	ll	0x0,rsrcl		; 254
 	sbcf	rsrcl,rdstl,rsvc
 	ob	rdstl,rdstl
 
@@ -1064,7 +1066,7 @@ L252:	jnbt	L24a
 L257:	jmp	L359
 
 
-	ll	0x0,rsrcl
+	ll	0x0,rsrcl		; 258
 	abcf	rsrcl,rdstl,rsvc
 	ob	rdstl,rdstl
 
@@ -1072,7 +1074,7 @@ L257:	jmp	L359
 L25b:	jmp	L39c
 
 
-	sbf	rirl,rirl,rsvc
+	sbf	rirl,rirl,rsvc		; 25c
 	mbf	rdstl,rdstl
 
 
@@ -1086,7 +1088,7 @@ L260:	srbcf	rdstl,rdstl
 	ob	rdstl,rdstl
 
 
-	slbcf	rdstl,rsrcl
+	slbcf	rdstl,rsrcl		; 264
 	jmp	L260
 
 
@@ -1094,7 +1096,7 @@ L266:	jzbt	L21b
 	jmp	L25e
 
 
-	slbcf	rdstl,rdstl,rsvc
+	slbcf	rdstl,rdstl,rsvc	; 268
 	ob	rdstl,rdstl
 
 
@@ -1102,7 +1104,7 @@ L26a:	tl	0x20,rpswl
 	jmp	L266
 
 
-	slbf	rdstl,rdstl,rsvc
+	slbf	rdstl,rdstl,rsvc	; 26c
 	ob	rdstl,rdstl
 
 
@@ -1126,13 +1128,13 @@ L279:	srw	rdsth,rdsth
 	jmp	L242
 
 
-	ccf	rdstl
+	ccf	rdstl			; 27c
 	nl	0xf0,rpswh
 	nl	0xf,rdstl
 	jmp	L166
 
 
-	sbf	rdstl,rdstl,rsvc
+	sbf	rdstl,rdstl,rsvc	; 280
 	ow	rdstl,rdstl
 
 
@@ -1140,7 +1142,7 @@ L282:	jsr	L2e6
 	jmp	L355
 
 
-	icw1f	rdstl,rdstl
+	icw1f	rdstl,rdstl		; 284
 	lcf	0x1,rirl,rsvc
 	ow	rdsth,rdstl
 
@@ -1148,7 +1150,7 @@ L282:	jsr	L2e6
 	jmp	L000
 
 
-	ocwf	rdstl,rdstl,rsvc
+	ocwf	rdstl,rdstl,rsvc	; 288
 	ow	rdsth,rdstl
 
 
@@ -1156,7 +1158,7 @@ L28a:	orb	rpswh,rdstl
 	jmp	L37c
 
 
-	dw1f	rdstl,rdstl
+	dw1f	rdstl,rdstl		; 28c
 	lcf	0x1,rirl,rsvc
 	ow	rdsth,rdstl
 
@@ -1164,7 +1166,7 @@ L28a:	orb	rpswh,rdstl
 	jmp	L000
 
 
-	tcwf	rdstl,rdstl,rsvc
+	tcwf	rdstl,rdstl,rsvc	; 290
 	ow	rdsth,rdstl
 
 
@@ -1172,7 +1174,7 @@ L292:	jsr	L2e6
 	jmp	L382
 
 
-	ll	0x0,rsrch
+	ll	0x0,rsrch		; 294
 	swcf	rsrch,rdstl,rsvc
 	ow	rdsth,rdstl
 
@@ -1180,7 +1182,7 @@ L292:	jsr	L2e6
 	jmp	L000
 
 
-	ll	0x0,rsrch
+	ll	0x0,rsrch		; 298
 	awcf	rsrch,rdstl,rsvc
 	ow	rdsth,rdstl
 
@@ -1188,7 +1190,7 @@ L292:	jsr	L2e6
 	jmp	L000
 
 
-	sbf	rirl,rirl,rsvc
+	sbf	rirl,rirl,rsvc		; 29c
 	mwf	rdstl,rdstl
 
 
@@ -1196,7 +1198,7 @@ L29e:	db1	rbal,rbal
 	jmp	L394
 
 
-	srwcf	rdsth,rdsth
+	srwcf	rdsth,rdsth		; 2a0
 	srwcf	rdsth,rdsth
 	slwcf	rdstl,rdstl,rsvc
 	ow	rdsth,rdstl
@@ -1212,7 +1214,7 @@ L2a6:	iw	0x0,rbal
 	jmp	L38e
 
 
-	slwcf	rdstl,rdstl,rsvc
+	slwcf	rdstl,rdstl,rsvc	; 2a8
 	ow	rdsth,rdstl
 
 
@@ -1220,7 +1222,7 @@ L2aa:	jsr	print_octal_word
 	jmp	L355
 
 
-	slwf	rdstl,rdstl,rsvc
+	slwf	rdstl,rdstl,rsvc	; 2ac
 	ow	rdsth,rdstl
 
 
@@ -1262,7 +1264,7 @@ L2c6:	r	rbah,rbal
 	jmp	L2a6
 
 
-	lgl	rirh
+	lgl	rirh			; 2c8
 	w	gh,gl
 	ow	rsrch,rsrcl,rsvc
 	mwf	rsrcl,rsrcl
@@ -1276,7 +1278,7 @@ L2cc:	ll	0x0,rpswl
 	jmp	L000
 
 
-	lgl	rirh
+	lgl	rirh			; 2d0
 	wiw2	gh,gl
 	ow	rsrch,rsrcl,rsvc
 	mwf	rsrcl,rsrcl
@@ -1288,7 +1290,7 @@ L2d4:	jsr	L2de
 	jmp	L2c2
 
 
-	lgl	rirh
+	lgl	rirh			; 2d8
 	riw2	gh,gl
 	iw	0x0,rbal
 	w	rbah,rbal
@@ -1300,7 +1302,7 @@ L2de:	al	0x2,rpswh
 	jmp	L1f9
 
 
-	lgl	rirh
+	lgl	rirh			; 2e0
 	al	0xfe,gl
 	cdb	gh
 	w	gh,gl
@@ -1312,7 +1314,7 @@ L2e6:	al	0x1,rpswh
 	jmp	L3e5
 
 
-	lgl	rirh
+	lgl	rirh			; 2e8
 	al	0xfe,gl
 	cdb	gh
 	r	gh,gl
@@ -1322,7 +1324,7 @@ L2e6:	al	0x1,rpswh
 	mwf	rsrcl,rsrcl
 
 
-	lgl	rirh
+	lgl	rirh			; 2f0
 	riw2	pch,pcl
 	iw	0x0,rbal
 	aw	gl,rbal
@@ -1334,7 +1336,7 @@ L2e6:	al	0x1,rpswh
 	jmp	L000
 
 
-	lgl	rirh
+	lgl	rirh			; 2f8
 	riw2	pch,pcl
 	iw	0x0,rbal
 	aw	gl,rbal
@@ -1346,12 +1348,12 @@ L2e6:	al	0x1,rpswh
 
 
 ; trap, 8-bit vector in rsrcl
-trap:	ll	0x0,rsrch	; high byte of vector is zero
+trap:	ll	0x0,rsrch		; high byte of vector is zero
 
 ; trap, 16-bit vector in rsrc
-trap16:	ri	i4		; clear trace interrupt enable
+trap16:	ri	i4			; clear trace interrupt enable
 
-	al	0xfe,spl	; sp -= 2
+	al	0xfe,spl		; sp -= 2
 	cdb	sph
 
 	ccf	rirl
@@ -1363,7 +1365,7 @@ trap16:	ri	i4		; clear trace interrupt enable
 	w	sph,spl
 	ow	rirh,rirl
 
-	al	0xfe,spl	; *--sp = pc
+	al	0xfe,spl		; *--sp = pc
 	cdb	sph
 	w	sph,spl
 	ow	pch,pcl
@@ -1371,20 +1373,20 @@ trap16:	ri	i4		; clear trace interrupt enable
 	nl	0xdf,rpswl
 
 ; fetch new PC and PSW
-trapgo:	riw2	rsrch,rsrcl	; fetch new PC
+trapgo:	riw2	rsrch,rsrcl		; fetch new PC
 	iw	0x0,pcl
 
-	ri	i5		; disable interrupts
+	ri	i5			; disable interrupts
 
-	r	rsrch,rsrcl	; fetch new PSW
+	r	rsrch,rsrcl		; fetch new PSW
 	ib	0x1,rpswh
 	
-	jnbt	L318		; if PSW interrupt priority is zero
-	si	i5		;   enable interrupts
+	jnbt	L318			; if PSW interrupt priority is zero
+	si	i5			;   enable interrupts
 
-L318:	tl	0x10,rpswh	; trace flag?
+L318:	tl	0x10,rpswh		; trace flag?
 	jzbt	L31b
-	si	i4		; set trace interrupt enable
+	si	i4			; set trace interrupt enable
 
 L31b:	lcf	0xf,rpswh,rsvc
 	nl	0x47,rpswl
@@ -1420,7 +1422,7 @@ L32c:	tl	0x10,rpswl,,tfclr
 	jzbf	L339
 	al	0x20,rpswl
 
-L337:	ll	0x04,rsrcl	; vector 004 - timeout & other errors
+L337:	ll	0x04,rsrcl		; vector 004 - timeout & other errors
 	jmp	trap
 
 
@@ -1450,14 +1452,14 @@ L342:	ltr	rpswl,rpswl
 L34b:	jmp	L136
 
 
-L34c:	jmp	L602		; reset mode 3: microcode at 3002
-	jmp	reset_mode_1	; reset mode 1, run from 173000
-	jmp	L103		; reset mode 2, ODT
+L34c:	jmp	L602			; reset mode 3: microcode at 3002
+	jmp	reset_mode_1		; reset mode 1, run from 173000
+	jmp	L103			; reset mode 2, ODT
 
 ; reset mode 0, load PC from 24, PS from 26
 	ll	0x14,rsrcl
 	ll	0x00,rsrch
-	jmp	trapgo		; treat as trap, except skip stacking PC & PSW
+	jmp	trapgo			; treat as trap, except skip stacking PC & PSW
 
 
 L352:	nl	0xf0,rpswh
@@ -1468,7 +1470,7 @@ L352:	nl	0xf0,rpswh
 L355:	sw	rdstl,rdstl
 	jsr	L2de
 
-	ll	0x40,rirl	; '@'
+	ll	0x40,rirl		; '@'
 	jsr	L2e6
 
 L359:	nl	0xdf,rpswl
@@ -1529,7 +1531,7 @@ L384:	ccf	rdstl
 
 
 L388:	jsr	L3fa
-	ll	0xd,rirl	; carriage return
+	ll	0xd,rirl		; carriage return
 	jsr	L2e6
 	slb	rpswl,rsrcl
 	jc8t	L392
